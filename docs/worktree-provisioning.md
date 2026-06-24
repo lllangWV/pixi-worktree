@@ -178,11 +178,11 @@ builds locally in seconds. Run deps: `git`, `bash`.
 
 ### 5.2 Release flow
 
-1. Change the tool, bump `PIXI_WORKTREE_VERSION` in the `pixi-worktree` script
-   **and** `context.version` in `recipe/recipe.yaml` (reset build `number` to 0).
-2. Tag + push: `git tag vX.Y.Z && git push --tags`.
-3. Push the tag; the `Publish` GitHub Action uploads to the `wv-forge`
-   prefix.dev channel.
+1. Run `pixi run publish` and choose the patch/minor/major/no-change release.
+2. For version bumps, the script updates both version files, resets the recipe
+   build `number` to 0, builds, commits, tags `vX.Y.Z`, and pushes the branch
+   and tag.
+3. The `Publish` GitHub Action uploads to the `wv-forge` prefix.dev channel.
 4. Consume: `pixi global install pixi-worktree`, or add `pixi-worktree` to a
    project's deps.
 

@@ -55,25 +55,29 @@ Equivalent manual form:
 rattler-build auth login prefix.dev --token "$PREFIX_API_KEY"
 ```
 
-## Build and publish
+## Build and upload locally
 
 ```bash
-pixi run -e pkg build      # build only -> output/noarch/
-pixi run -e pkg publish    # build, then upload to $PREFIX_CHANNEL
+pixi run build    # build only -> output/noarch/
+pixi run upload   # build, then upload the current recipe version to $PREFIX_CHANNEL
 ```
 
-The publish task uses `rattler-build upload prefix --skip-existing`.
+The upload task uses `rattler-build upload prefix --skip-existing`.
 
 ## Releasing a new version
 
-1. Bump `PIXI_WORKTREE_VERSION` in the `pixi-worktree` script **and**
-   `context.version` in `recipe/recipe.yaml` (reset the build `number` to 0). A
-   rebuild of the *same* version+build is a no-op the channel skips — a real
-   release needs a version or build-number bump.
-2. Tag the source: `git tag vX.Y.Z`.
-3. Push the tag: `git push origin vX.Y.Z`.
-4. The `Publish` GitHub Action builds the package and uploads it to the
-   `wv-forge` prefix.dev channel.
+Run the guided release task:
 
-For a local publish, run `pixi run -e pkg publish` after authenticating with
-`pixi run -e pkg channel-auth`.
+```bash
+pixi run publish
+```
+
+The script asks for a patch/minor/major/no-change release. For version bumps, it
+updates both `PIXI_WORKTREE_VERSION` in the `pixi-worktree` script and
+`context.version` in `recipe/recipe.yaml`, resets the recipe build `number` to
+0, builds the package, commits the version bump, creates `vX.Y.Z`, and pushes
+the branch and tag. The `Publish` GitHub Action then builds the tagged source
+and uploads it to the `wv-forge` prefix.dev channel.
+
+A rebuild of the same version+build is a no-op the channel skips. For a local
+upload, run `pixi run upload` after authenticating with `pixi run channel-auth`.

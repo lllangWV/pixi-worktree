@@ -24,8 +24,9 @@ PREFIX_SERVER_URL = "https://prefix.dev"
 
 [feature.pkg.tasks]
 channel-auth = "bash scripts/channel-auth.sh"
-build = "rattler-build build --recipe recipe/recipe.yaml --output-dir output"
-publish = { cmd = "rattler-build upload prefix --channel \"$PREFIX_CHANNEL\" --url \"$PREFIX_SERVER_URL\" --skip-existing output/noarch/pixi-worktree-*.conda", depends-on = ["build"] }
+build = "bash scripts/build-package.sh"
+upload = { cmd = "bash scripts/upload.sh", depends-on = ["build"] }
+publish = "bash scripts/publish.sh"
 
 [environments]
 pkg = { features = ["pkg"], no-default-feature = true }
