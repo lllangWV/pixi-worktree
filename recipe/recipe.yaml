@@ -1,0 +1,46 @@
+# Recipe for worktree-warden — generic git-worktree provisioning CLI.
+# Source is the repo root (this recipe lives in recipe/). Built from the local
+# working tree via a path source — no clone, no credentials needed.
+
+context:
+  version: "0.1.0"
+
+package:
+  name: worktree-warden
+  version: ${{ version }}
+
+source:
+  # Repo root, one level up from this recipe (recipe/ -> repo root).
+  # use_gitignore (default true) keeps .pixi/, output/ and other ignored paths
+  # out of the copied build tree.
+  path: ..
+
+build:
+  number: 0
+  noarch: generic
+  script:
+    content: |
+      mkdir -p "${PREFIX}/bin" "${PREFIX}/etc/conda/activate.d"
+      install -m 0755 worktree-warden "${PREFIX}/bin/worktree-warden"
+      install -m 0644 activate.d/worktree-warden.sh "${PREFIX}/etc/conda/activate.d/worktree-warden.sh"
+
+requirements:
+  run:
+    - git
+    - bash
+
+tests:
+  - script:
+      - worktree-warden version
+      - worktree-warden help
+
+about:
+  homepage: https://github.com/lllangWV/worktree-warden
+  license: MIT
+  license_file: LICENSE
+  summary: Generic, tool-agnostic git-worktree provisioning (post-checkout hook installer)
+  repository: https://github.com/lllangWV/worktree-warden
+
+extra:
+  recipe-maintainers:
+    - lllangWV

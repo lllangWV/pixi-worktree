@@ -1,0 +1,15 @@
+# Build output
+output/
+
+# pixi
+.pixi/
+pixi.lock
+
+# editor / agent
+.claude/
+.agdex/
+
+# misc
+tmp/
+__pycache__/
+*.pyc

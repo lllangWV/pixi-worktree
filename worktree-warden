@@ -1,0 +1,192 @@
+#!/usr/bin/env bash
+# worktree-warden — set up generic git-worktree provisioning in a repo.
+#
+# Installs a tool-agnostic `post-checkout` hook that, whenever `git worktree add`
+# creates a worktree, (1) symlinks or copies the gitignored main-only files listed
+# in `.worktreelinks`, and (2) runs `.githooks/worktree-setup` if it is executable.
+# Works for any tool that creates worktrees via the git CLI (Claude Code, t3code,
+# plain `git worktree add`). Pairs especially well with pixi: add worktree-warden
+# to a project's [dependencies] and its activate.d script auto-activates the hook.
+#
+# Distributed as a noarch conda package:
+#   pixi global install worktree-warden
+#
+# Usage:
+#   worktree-warden install [--repo DIR]   install + activate in a repo (default: current repo)
+#   worktree-warden update  [--repo DIR]   refresh the post-checkout hook to this version
+#   worktree-warden setup-global           install into ~/.git-template so new clones get it
+#   worktree-warden version
+set -euo pipefail
+
+WORKTREE_WARDEN_VERSION="0.1.0"
+PROG="worktree-warden"
+
+die() { echo "$PROG: $*" >&2; exit 1; }
+
+usage() {
+  sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+# The canonical generic hook (kept in lockstep with WORKTREE_WARDEN_VERSION).
+# Emitted verbatim except the version placeholder; the heredoc is quoted so
+# nothing else expands.
+gen_post_checkout() {
+  sed "s/__WORKTREE_WARDEN_VERSION__/${WORKTREE_WARDEN_VERSION}/" <<'HOOK'
+#!/usr/bin/env bash
+# Generic git-worktree provisioner — managed by worktree-warden.
+# worktree-warden-version: __WORKTREE_WARDEN_VERSION__
+# Do not edit by hand; run `worktree-warden update` to refresh. Repo-specific behavior:
+#   .worktreelinks            gitignored main-only files: `PATH` (symlink) or `copy PATH`
+#   .githooks/worktree-setup  repo env install (pixi/npm/uv/...), run if executable
+#
+# Activate once per clone:  git config core.hooksPath .githooks
+set -u
+
+prev_head="$1"   # $2=new HEAD, $3=branch-flag (unused)
+null_ref="0000000000000000000000000000000000000000"
+
+# Only on worktree-add / clone (previous HEAD is the null ref)...
+[ "$prev_head" = "$null_ref" ] || exit 0
+# ...and only inside a *linked* worktree, never the main checkout.
+git_dir="$(git rev-parse --git-dir 2>/dev/null)" || exit 0
+common_dir="$(git rev-parse --git-common-dir 2>/dev/null)" || exit 0
+[ "$git_dir" != "$common_dir" ] || exit 0
+
+export WORKTREE_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+export MAIN_ROOT="$(cd "$(dirname "$common_dir")" 2>/dev/null && pwd)" || exit 0
+
+# 1) Bring in gitignored, main-only files listed in `.worktreelinks` (one path per
+#    line; blank lines and #-comments ignored). Each line is `PATH` (default:
+#    symlink — read-only shared state) or `copy PATH` (independent per-worktree
+#    copy — for mutable state like a lockfile).
+links_file="$MAIN_ROOT/.worktreelinks"
+if [ -f "$links_file" ]; then
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in ''|'#'*) continue ;; esac
+    mode=symlink; rel="$line"
+    case "$line" in
+      "copy "*)    mode=copy;    rel="${line#copy }" ;;
+      "symlink "*) mode=symlink; rel="${line#symlink }" ;;
+    esac
+    src="$MAIN_ROOT/$rel"; dst="$WORKTREE_ROOT/$rel"
+    if [ -e "$src" ] && [ ! -e "$dst" ]; then
+      mkdir -p "$(dirname "$dst")"
+      if [ "$mode" = copy ]; then
+        cp -a "$src" "$dst" && echo "post-checkout: copied $rel" >&2
+      else
+        ln -s "$src" "$dst" && echo "post-checkout: linked $rel" >&2
+      fi
+    fi
+  done < "$links_file"
+fi
+
+# 2) Repo-specific environment setup (best-effort; never fail worktree creation).
+setup="$MAIN_ROOT/.githooks/worktree-setup"
+if [ -x "$setup" ]; then
+  ( cd "$WORKTREE_ROOT" && "$setup" ) \
+    || echo "post-checkout: worktree-setup skipped/failed (non-fatal)" >&2
+fi
+
+exit 0
+HOOK
+}
+
+gen_worktreelinks() {
+  cat <<'EOF'
+# Gitignored files that live only in the main checkout; the post-checkout hook
+# brings each into every new worktree. One repo-relative path per line:
+#   PATH         symlink to main (default) — read-only shared state (secrets, channels)
+#   copy PATH    independent per-worktree copy — mutable state (e.g. a lockfile)
+# Uncomment / add the ones your repo needs:
+# .env
+# .dvc/config.local
+# copy pixi.lock
+EOF
+}
+
+gen_worktree_setup_sample() {
+  cat <<'EOF'
+#!/usr/bin/env bash
+# Repo-specific worktree env pre-warm, invoked by .githooks/post-checkout.
+# $MAIN_ROOT and $WORKTREE_ROOT are exported by the hook; cwd is the new worktree.
+# Best-effort: a non-zero exit is treated as non-fatal.
+#
+# To enable: cp this file to `worktree-setup` (drop .sample) and `chmod +x` it.
+set -u
+
+# --- pixi -------------------------------------------------------------------
+# command -v pixi >/dev/null 2>&1 || exit 0
+# PIXI_FROZEN=true pixi install --frozen
+
+# --- node -------------------------------------------------------------------
+# command -v npm >/dev/null 2>&1 && npm ci
+
+# --- python / uv ------------------------------------------------------------
+# command -v uv >/dev/null 2>&1 && uv sync
+EOF
+}
+
+resolve_repo() {
+  local repo=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --repo) repo="${2:-}"; shift 2 ;;
+      --repo=*) repo="${1#--repo=}"; shift ;;
+      *) shift ;;
+    esac
+  done
+  [ -n "$repo" ] || repo="$(git rev-parse --show-toplevel 2>/dev/null)" \
+    || die "not inside a git repo; pass --repo DIR"
+  git -C "$repo" rev-parse --show-toplevel >/dev/null 2>&1 \
+    || die "$repo is not a git repository"
+  git -C "$repo" rev-parse --show-toplevel
+}
+
+cmd_install() {
+  local repo; repo="$(resolve_repo "$@")"
+  mkdir -p "$repo/.githooks"
+  gen_post_checkout > "$repo/.githooks/post-checkout"
+  chmod +x "$repo/.githooks/post-checkout"
+  echo "$PROG: wrote .githooks/post-checkout (v$WORKTREE_WARDEN_VERSION)"
+
+  if [ ! -e "$repo/.worktreelinks" ]; then
+    gen_worktreelinks > "$repo/.worktreelinks"
+    echo "$PROG: created starter .worktreelinks — edit to list gitignored main-only files"
+  fi
+  if [ ! -e "$repo/.githooks/worktree-setup" ] && [ ! -e "$repo/.githooks/worktree-setup.sample" ]; then
+    gen_worktree_setup_sample > "$repo/.githooks/worktree-setup.sample"
+    echo "$PROG: created .githooks/worktree-setup.sample — cp to worktree-setup + chmod +x to enable"
+  fi
+
+  git -C "$repo" config core.hooksPath .githooks
+  echo "$PROG: set core.hooksPath=.githooks"
+  echo "$PROG: commit .githooks/ and .worktreelinks so it travels with the repo and every clone."
+}
+
+cmd_update() {
+  local repo; repo="$(resolve_repo "$@")"
+  [ -f "$repo/.githooks/post-checkout" ] \
+    || die "no .githooks/post-checkout in $repo — run '$PROG install' first"
+  gen_post_checkout > "$repo/.githooks/post-checkout"
+  chmod +x "$repo/.githooks/post-checkout"
+  echo "$PROG: updated .githooks/post-checkout to v$WORKTREE_WARDEN_VERSION"
+}
+
+cmd_setup_global() {
+  local tmpl="${HOME}/.git-template"
+  mkdir -p "$tmpl/hooks"
+  gen_post_checkout > "$tmpl/hooks/post-checkout"
+  chmod +x "$tmpl/hooks/post-checkout"
+  git config --global init.templateDir "$tmpl"
+  echo "$PROG: installed generic hook to $tmpl/hooks and set global init.templateDir"
+  echo "$PROG: new clones/inits now get it in .git/hooks (a no-op in repos without .worktreelinks)"
+}
+
+case "${1:-}" in
+  install)      shift; cmd_install "$@" ;;
+  update)       shift; cmd_update "$@" ;;
+  setup-global) shift; cmd_setup_global "$@" ;;
+  version|--version|-V) echo "$PROG $WORKTREE_WARDEN_VERSION" ;;
+  ""|help|-h|--help) usage ;;
+  *) die "unknown command: $1 (try '$PROG help')" ;;
+esac
