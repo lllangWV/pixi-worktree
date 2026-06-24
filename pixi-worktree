@@ -1,25 +1,25 @@
 #!/usr/bin/env bash
-# worktree-warden — set up generic git-worktree provisioning in a repo.
+# pixi-worktree — set up generic git-worktree provisioning in a repo.
 #
 # Installs a tool-agnostic `post-checkout` hook that, whenever `git worktree add`
 # creates a worktree, (1) symlinks or copies the gitignored main-only files listed
 # in `.worktreelinks`, and (2) runs `.githooks/worktree-setup` if it is executable.
 # Works for any tool that creates worktrees via the git CLI (Claude Code, t3code,
-# plain `git worktree add`). Pairs especially well with pixi: add worktree-warden
+# plain `git worktree add`). Pairs especially well with pixi: add pixi-worktree
 # to a project's [dependencies] and its activate.d script auto-activates the hook.
 #
 # Distributed as a noarch conda package:
-#   pixi global install worktree-warden
+#   pixi global install pixi-worktree
 #
 # Usage:
-#   worktree-warden install [--repo DIR]   install + activate in a repo (default: current repo)
-#   worktree-warden update  [--repo DIR]   refresh the post-checkout hook to this version
-#   worktree-warden setup-global           install into ~/.git-template so new clones get it
-#   worktree-warden version
+#   pixi-worktree install [--repo DIR]   install + activate in a repo (default: current repo)
+#   pixi-worktree update  [--repo DIR]   refresh the post-checkout hook to this version
+#   pixi-worktree setup-global           install into ~/.git-template so new clones get it
+#   pixi-worktree version
 set -euo pipefail
 
-WORKTREE_WARDEN_VERSION="0.1.0"
-PROG="worktree-warden"
+PIXI_WORKTREE_VERSION="0.1.0"
+PROG="pixi-worktree"
 
 die() { echo "$PROG: $*" >&2; exit 1; }
 
@@ -27,15 +27,15 @@ usage() {
   sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'
 }
 
-# The canonical generic hook (kept in lockstep with WORKTREE_WARDEN_VERSION).
+# The canonical generic hook (kept in lockstep with PIXI_WORKTREE_VERSION).
 # Emitted verbatim except the version placeholder; the heredoc is quoted so
 # nothing else expands.
 gen_post_checkout() {
-  sed "s/__WORKTREE_WARDEN_VERSION__/${WORKTREE_WARDEN_VERSION}/" <<'HOOK'
+  sed "s/__PIXI_WORKTREE_VERSION__/${PIXI_WORKTREE_VERSION}/" <<'HOOK'
 #!/usr/bin/env bash
-# Generic git-worktree provisioner — managed by worktree-warden.
-# worktree-warden-version: __WORKTREE_WARDEN_VERSION__
-# Do not edit by hand; run `worktree-warden update` to refresh. Repo-specific behavior:
+# Generic git-worktree provisioner — managed by pixi-worktree.
+# pixi-worktree-version: __PIXI_WORKTREE_VERSION__
+# Do not edit by hand; run `pixi-worktree update` to refresh. Repo-specific behavior:
 #   .worktreelinks            gitignored main-only files: `PATH` (symlink) or `copy PATH`
 #   .githooks/worktree-setup  repo env install (pixi/npm/uv/...), run if executable
 #
@@ -147,7 +147,7 @@ cmd_install() {
   mkdir -p "$repo/.githooks"
   gen_post_checkout > "$repo/.githooks/post-checkout"
   chmod +x "$repo/.githooks/post-checkout"
-  echo "$PROG: wrote .githooks/post-checkout (v$WORKTREE_WARDEN_VERSION)"
+  echo "$PROG: wrote .githooks/post-checkout (v$PIXI_WORKTREE_VERSION)"
 
   if [ ! -e "$repo/.worktreelinks" ]; then
     gen_worktreelinks > "$repo/.worktreelinks"
@@ -169,7 +169,7 @@ cmd_update() {
     || die "no .githooks/post-checkout in $repo — run '$PROG install' first"
   gen_post_checkout > "$repo/.githooks/post-checkout"
   chmod +x "$repo/.githooks/post-checkout"
-  echo "$PROG: updated .githooks/post-checkout to v$WORKTREE_WARDEN_VERSION"
+  echo "$PROG: updated .githooks/post-checkout to v$PIXI_WORKTREE_VERSION"
 }
 
 cmd_setup_global() {
@@ -186,7 +186,7 @@ case "${1:-}" in
   install)      shift; cmd_install "$@" ;;
   update)       shift; cmd_update "$@" ;;
   setup-global) shift; cmd_setup_global "$@" ;;
-  version|--version|-V) echo "$PROG $WORKTREE_WARDEN_VERSION" ;;
+  version|--version|-V) echo "$PROG $PIXI_WORKTREE_VERSION" ;;
   ""|help|-h|--help) usage ;;
   *) die "unknown command: $1 (try '$PROG help')" ;;
 esac

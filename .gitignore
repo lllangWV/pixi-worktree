@@ -5,11 +5,23 @@ output/
 .pixi/
 pixi.lock
 
+# local secrets / machine config
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+.aws/
+.rattler/
+
 # editor / agent
 .claude/
 .agdex/
 
 # misc
 tmp/
+*.log
+.DS_Store
 __pycache__/
 *.pyc

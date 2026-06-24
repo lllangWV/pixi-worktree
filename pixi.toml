@@ -3,17 +3,15 @@ channels = ["https://prefix.dev/conda-forge"]
 platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
 preview = ["pixi-build"]
 
-# Conda packaging for worktree-warden. The `pkg` environment isolates
+# Conda packaging for pixi-worktree. The `pkg` environment isolates
 # rattler-build so it doesn't enter any default solve. Run with
 # `pixi run -e pkg <task>`.
 #
-# Credentials: rattler-build's S3 client reads S3_* env vars (or its own auth
-# store at ~/.rattler/credentials.json) — NOT the AWS_* credential chain or
-# ~/.aws profiles. Authenticate once with the channel-auth task (see docs/publishing.md).
+# Credentials: rattler-build's prefix.dev upload reads PREFIX_API_KEY or its own
+# auth store at ~/.rattler/credentials.json. Authenticate once with the
+# channel-auth task for local publishes (see docs/publishing.md).
 #
-# Set the destination channel via the CHANNEL env var (an S3 URL, e.g.
-# s3://my-conda-channel). Region/endpoint default to us-east-1; override with
-# REGION / ENDPOINT_URL if needed.
+# Set the destination channel via PREFIX_CHANNEL.
 
 [dependencies]
 
@@ -21,14 +19,13 @@ preview = ["pixi-build"]
 rattler-build = ">=0.40"
 
 [feature.pkg.activation.env]
-CHANNEL = "s3://CHANGEME-conda-channel"
-REGION = "us-east-1"
-ENDPOINT_URL = "https://s3.us-east-1.amazonaws.com"
+PREFIX_CHANNEL = "wv-forge"
+PREFIX_SERVER_URL = "https://prefix.dev"
 
 [feature.pkg.tasks]
 channel-auth = "bash scripts/channel-auth.sh"
 build = "rattler-build build --recipe recipe/recipe.yaml --output-dir output"
-publish = { cmd = "rattler-build upload s3 --channel \"$CHANNEL\" --region \"$REGION\" --endpoint-url \"$ENDPOINT_URL\" output/noarch/worktree-warden-*.conda", depends-on = ["build"] }
+publish = { cmd = "rattler-build upload prefix --channel \"$PREFIX_CHANNEL\" --url \"$PREFIX_SERVER_URL\" --skip-existing output/noarch/pixi-worktree-*.conda", depends-on = ["build"] }
 
 [environments]
 pkg = { features = ["pkg"], no-default-feature = true }

@@ -1,21 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Authenticate rattler-build to an S3 conda channel so worktree-warden can be
-# published.
+# Authenticate rattler-build to prefix.dev so pixi-worktree can be published.
 #
-# rattler-build's S3 client does NOT use the AWS_* credential chain or ~/.aws
-# profiles. It reads from its own auth store or S3_* env vars. This script
-# registers credentials in that auth store (~/.rattler/credentials.json) for the
-# channel(s) you pass, so `pixi run -e pkg publish` just works. Nothing secret is
-# written into this repo.
+# rattler-build's prefix.dev upload reads PREFIX_API_KEY or its own auth store at
+# ~/.rattler/credentials.json. This script registers a token in that auth store
+# so `pixi run -e pkg publish` works locally. Nothing secret is written into this
+# repo.
 #
-# Channels: the channel set in pixi.toml ($CHANNEL) by default, plus any extra
-# S3 URLs passed as arguments. Credentials come from an AWS profile if one is
-# configured (default: AWS_PROFILE or "default"), otherwise you are prompted.
+# Hosts: the host from PREFIX_SERVER_URL by default, plus any extra hosts passed
+# as arguments. PREFIX_API_KEY is used when set; otherwise you are prompted.
 
-CHANNELS=("${CHANNEL:-}" "$@")
-PROFILE="${AWS_PROFILE:-default}"
+SERVER="${PREFIX_SERVER_URL:-https://prefix.dev}"
+DEFAULT_HOST="${SERVER#http://}"
+DEFAULT_HOST="${DEFAULT_HOST#https://}"
+DEFAULT_HOST="${DEFAULT_HOST%%/*}"
+HOSTS=("${DEFAULT_HOST}" "$@")
 
 if ! command -v rattler-build &>/dev/null; then
   echo "Error: rattler-build not found. Run inside the pkg env, e.g.:" >&2
@@ -23,33 +23,21 @@ if ! command -v rattler-build &>/dev/null; then
   exit 1
 fi
 
-KEY_ID=""
-SECRET=""
-if command -v aws &>/dev/null; then
-  KEY_ID="$(aws configure get aws_access_key_id --profile "$PROFILE" 2>/dev/null || true)"
-  SECRET="$(aws configure get aws_secret_access_key --profile "$PROFILE" 2>/dev/null || true)"
-fi
-
-if [ -n "$KEY_ID" ] && [ -n "$SECRET" ]; then
-  echo "Using credentials from AWS profile '$PROFILE'."
-else
-  echo "No usable AWS profile '$PROFILE' found; enter S3 credentials manually."
-  read -rp "S3 Access Key ID: " KEY_ID
-  read -rsp "S3 Secret Access Key: " SECRET
+API_KEY="${PREFIX_API_KEY:-}"
+if [ -z "$API_KEY" ]; then
+  read -rsp "prefix.dev API key: " API_KEY
   echo
 fi
 
-if [ -z "$KEY_ID" ] || [ -z "$SECRET" ]; then
-  echo "Error: no credentials provided." >&2
+if [ -z "$API_KEY" ]; then
+  echo "Error: no API key provided." >&2
   exit 1
 fi
 
-for channel in "${CHANNELS[@]}"; do
-  [ -n "$channel" ] || continue
-  rattler-build auth login "$channel" \
-    --s3-access-key-id "$KEY_ID" \
-    --s3-secret-access-key "$SECRET"
-  echo "Authenticated: $channel"
+for host in "${HOSTS[@]}"; do
+  [ -n "$host" ] || continue
+  rattler-build auth login "$host" --token "$API_KEY"
+  echo "Authenticated: $host"
 done
 
 echo

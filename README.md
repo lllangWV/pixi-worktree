@@ -1,4 +1,4 @@
-# worktree-warden
+# pixi-worktree
 
 Generic, tool-agnostic git-worktree provisioning. Installs a `post-checkout` hook
 that fires whenever a worktree is created (Claude Code, t3code, or a plain
@@ -14,7 +14,7 @@ Why a hook and not the tool's own feature? Git fires `post-checkout` for *every*
 tool that creates a worktree via the git CLI, so one committed hook covers them
 all. (Claude Code, notably, has no native post-create setup hook.)
 
-It pairs especially well with **pixi**: add `worktree-warden` to a project's
+It pairs especially well with **pixi**: add `pixi-worktree` to a project's
 `[dependencies]` and the package's `activate.d` script auto-activates the hook on
 every `pixi run` — including fresh clones — with no per-repo snippet.
 
@@ -23,14 +23,14 @@ every `pixi run` — including fresh clones — with no per-repo snippet.
 Distributed as a `noarch` conda package:
 
 ```bash
-pixi global install worktree-warden
+pixi global install pixi-worktree
 ```
 
 ## Use
 
 ```bash
 cd your-repo
-worktree-warden install   # writes .githooks/post-checkout, a starter .worktreelinks,
+pixi-worktree install   # writes .githooks/post-checkout, a starter .worktreelinks,
                           # a worktree-setup.sample, and sets core.hooksPath=.githooks
 # edit .worktreelinks to list your gitignored main-only files
 git add .githooks .worktreelinks && git commit -m "chore: worktree provisioning"
@@ -44,30 +44,30 @@ so it travels to every clone and teammate.
 `core.hooksPath` is never cloned (git won't auto-run hooks from a clone — RCE
 protection), so each clone needs it set once. Options:
 
-- **pixi repos (recommended): add `worktree-warden` to `[dependencies]`.** The
+- **pixi repos (recommended): add `pixi-worktree` to `[dependencies]`.** The
   package ships an `activate.d` script that idempotently sets
   `core.hooksPath=.githooks` on env activation whenever a committed
   `.githooks/post-checkout` is present. So one dependency line + committed
   `.githooks` = the hook auto-activates on every `pixi run`, including fresh
   clones — no per-repo activation snippet.
-- **anything:** `git config core.hooksPath .githooks`, or `worktree-warden install` again.
-- **machine-wide:** `worktree-warden setup-global` drops the hook into
+- **anything:** `git config core.hooksPath .githooks`, or `pixi-worktree install` again.
+- **machine-wide:** `pixi-worktree setup-global` drops the hook into
   `~/.git-template` so every future clone/init on that machine gets it automatically
   (it's a no-op in repos without a `.worktreelinks`).
 
-> Note: the `activate.d` auto-activation works when `worktree-warden` is a **project
+> Note: the `activate.d` auto-activation works when `pixi-worktree` is a **project
 > dependency** (its `activate.d` is sourced on env activation). `pixi global install
-> worktree-warden` gives you the `worktree-warden` command everywhere but does not
+> pixi-worktree` gives you the `pixi-worktree` command everywhere but does not
 > auto-activate in arbitrary repos.
 
 ## Commands
 
 | Command | Effect |
 |---------|--------|
-| `worktree-warden install [--repo DIR]` | Write the hook + starters, set `core.hooksPath` |
-| `worktree-warden update [--repo DIR]` | Refresh `.githooks/post-checkout` to this version |
-| `worktree-warden setup-global` | Install into `~/.git-template`, set global `init.templateDir` |
-| `worktree-warden version` | Print version |
+| `pixi-worktree install [--repo DIR]` | Write the hook + starters, set `core.hooksPath` |
+| `pixi-worktree update [--repo DIR]` | Refresh `.githooks/post-checkout` to this version |
+| `pixi-worktree setup-global` | Install into `~/.git-template`, set global `init.templateDir` |
+| `pixi-worktree version` | Print version |
 
 ## Notes
 
@@ -79,7 +79,7 @@ protection), so each clone needs it set once. Options:
   `copy pixi.lock`.
 - On Windows, symlinks need Developer Mode/admin — this tool targets Linux/macOS
   (and Git Bash) first.
-- The packaged hook is self-contained (embedded in the `worktree-warden` script),
+- The packaged hook is self-contained (embedded in the `pixi-worktree` script),
   so the conda package is a single file with no data-dir resolution.
 
 ## Building & publishing

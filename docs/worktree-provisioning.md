@@ -1,10 +1,10 @@
-# Git Worktree Provisioning (`worktree-warden`)
+# Git Worktree Provisioning (`pixi-worktree`)
 
 A design + architecture report for the tool-agnostic git-worktree provisioning
-system distributed as the `worktree-warden` conda package.
+system distributed as the `pixi-worktree` conda package.
 
-- **Source / recipe:** this repo (`worktree-warden`, builds from the local tree)
-- **Channel:** an S3-backed conda channel (configurable; see `docs/publishing.md`)
+- **Source / recipe:** this repo (`pixi-worktree`, builds from the local tree)
+- **Channel:** a prefix.dev conda channel (configurable; see `docs/publishing.md`)
 
 ---
 
@@ -99,11 +99,11 @@ per-checkout** (the only real cost). Mechanisms people use, ranked:
 
 Dedicated agent tools converge on a "setup script after worktree create" feature
 (Conductor's *Setup script*, worktrunk's `post-start`, Cursor/Devin/OpenHands
-install commands). `worktree-warden` is the git-native, tool-agnostic equivalent. No
+install commands). `pixi-worktree` is the git-native, tool-agnostic equivalent. No
 tool auto-propagates a *new* dependency added mid-task; per-worktree lockfile+env
 isolation (what pixi gives) is the safe model.
 
-## 4. The `worktree-warden` tool
+## 4. The `pixi-worktree` tool
 
 A single, self-contained bash CLI. The canonical generic hook is **embedded** in
 the script (so the conda package is one file with no data-dir resolution).
@@ -125,27 +125,27 @@ which checkout invoked `git worktree add`.
 
 | Command | Effect |
 |---------|--------|
-| `worktree-warden install [--repo DIR]` | write the hook + starters, set `core.hooksPath` |
-| `worktree-warden update [--repo DIR]` | refresh `.githooks/post-checkout` to this version |
-| `worktree-warden setup-global` | install into `~/.git-template`, set global `init.templateDir` |
-| `worktree-warden version` | print version |
+| `pixi-worktree install [--repo DIR]` | write the hook + starters, set `core.hooksPath` |
+| `pixi-worktree update [--repo DIR]` | refresh `.githooks/post-checkout` to this version |
+| `pixi-worktree setup-global` | install into `~/.git-template`, set global `init.templateDir` |
+| `pixi-worktree version` | print version |
 
 ### 4.3 Auto-activation via `activate.d` (the key to "just add it as a dependency")
 
-Installing the package only puts the `worktree-warden` CLI on PATH — it does **not**
+Installing the package only puts the `pixi-worktree` CLI on PATH — it does **not**
 touch any repo. To make a dependency entry *enable* the hook, the package ships
-`etc/conda/activate.d/worktree-warden.sh`, which pixi/conda source on env
+`etc/conda/activate.d/pixi-worktree.sh`, which pixi/conda source on env
 activation. It idempotently sets `core.hooksPath=.githooks` whenever a committed
 `.githooks/post-checkout` is present.
 
 Result:
 
-> **Add `worktree-warden` to a project's `[dependencies]` + commit `.githooks/`** ⇒
+> **Add `pixi-worktree` to a project's `[dependencies]` + commit `.githooks/`** ⇒
 > the hook auto-activates on every `pixi run`, including fresh clones, with **no
 > per-repo activation snippet**.
 
 Caveat: this works for **project dependencies** (env activation sources `activate.d`).
-`pixi global install worktree-warden` gives the command everywhere but does not
+`pixi global install pixi-worktree` gives the command everywhere but does not
 auto-activate arbitrary repos.
 
 ### 4.4 Usage
@@ -153,10 +153,10 @@ auto-activate arbitrary repos.
 ```bash
 # author, once
 cd your-repo
-worktree-warden install          # writes hook + starters, sets core.hooksPath
+pixi-worktree install          # writes hook + starters, sets core.hooksPath
 $EDITOR .worktreelinks           # list gitignored main-only files (.env, .dvc/config.local, …)
 # (optional) cp .githooks/worktree-setup.sample .githooks/worktree-setup; chmod +x; edit
-pixi add worktree-warden         # so it auto-activates on every clone (pixi repos)
+pixi add pixi-worktree         # so it auto-activates on every clone (pixi repos)
 git add .githooks .worktreelinks pixi.toml && git commit -m "chore: worktree provisioning"
 ```
 
@@ -165,8 +165,8 @@ teammate.
 
 ## 5. Distribution architecture
 
-This repo is **self-contained**: the source (`worktree-warden`,
-`activate.d/worktree-warden.sh`), the recipe (`recipe/recipe.yaml`), and the
+This repo is **self-contained**: the source (`pixi-worktree`,
+`activate.d/pixi-worktree.sh`), the recipe (`recipe/recipe.yaml`), and the
 build/publish tasks (`pixi.toml`, `scripts/channel-auth.sh`) all live together. The
 recipe builds from the local working tree (`source: path: ..`) — no separate
 feedstock, no clone, no git credentials at build time.
@@ -178,11 +178,12 @@ builds locally in seconds. Run deps: `git`, `bash`.
 
 ### 5.2 Release flow
 
-1. Change the tool, bump `WORKTREE_WARDEN_VERSION` in the `worktree-warden` script
+1. Change the tool, bump `PIXI_WORKTREE_VERSION` in the `pixi-worktree` script
    **and** `context.version` in `recipe/recipe.yaml` (reset build `number` to 0).
 2. Tag + push: `git tag vX.Y.Z && git push --tags`.
-3. `pixi run -e pkg publish` (see `docs/publishing.md`).
-4. Consume: `pixi global install worktree-warden`, or add `worktree-warden` to a
+3. Push the tag; the `Publish` GitHub Action uploads to the `wv-forge`
+   prefix.dev channel.
+4. Consume: `pixi global install pixi-worktree`, or add `pixi-worktree` to a
    project's deps.
 
 ## 6. Verification log
